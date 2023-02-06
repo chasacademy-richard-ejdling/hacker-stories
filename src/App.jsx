@@ -1,7 +1,8 @@
 import "./App.css";
 import * as React from 'react';
-import Search from "./Search";
+import InputWithLabel from "./InputWithLabel";
 import List from "./List";
+import { useState } from "react";
 
 const stories = [
   {
@@ -22,17 +23,28 @@ const stories = [
   },
 ];
 
-const handeleSearch = event => {
-  console.log(event.target.value)
-}
+function App() {  
+  function useStorageState(key, initialState) {
+    const [value, setValue] = useState(localStorage.getItem(key) || initialState)
 
-function App() {
+    React.useEffect(() => localStorage.setItem(key, value), [value])
+
+    return [value, setValue]
+  }
+
+  const [searchTerm, setSearchTerm] = useStorageState('search', 'React')
+
+  function handeleSearch(event) {
+    setSearchTerm(event.target.value)
+  }
+
   return (
     <div>
       <h1>My Hacker Stories</h1>
-      <Search id='Search' placeholder='Write Here' onSearch={handeleSearch} />
+      <InputWithLabel id='Search' label='Search: ' placeholder='Write Here' onSearch={handeleSearch} search={searchTerm}>Search: </InputWithLabel>
+      <InputWithLabel id='Hello!' label='Hello! ' type='checkbox' placeholder='Write Here If You Want'>Child</InputWithLabel>
       <hr />
-      <List list={stories} />
+      <List list={stories.filter(item => item.title.toLowerCase().includes(searchTerm.toLowerCase()))} />
     </div>
   );
 }
