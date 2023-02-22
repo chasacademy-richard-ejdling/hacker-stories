@@ -1,29 +1,62 @@
 import "./App.css";
 import * as React from 'react';
+import axios from "axios";
 import InputWithLabel from "./InputWithLabel";
+import SearchForm from "./SearchForm";
 import List from "./List";
 import { useState } from "react";
 
-const stories = [
-  {
-    title: 'React',
-    url: 'https://reactjs.org/',
-    author: 'Jordan Walke',
-    num_comments: 3,
-    points: 4,
-    objectID: 0,
-  },
-  {
-    title: 'Redux',
-    url: 'https://redux.js.org/',
-    author: 'Dan Abramov, Andrew Clark',
-    num_comments: 2,
-    points: 5,
-    objectID: 1,
-  },
-];
+const API_ENDPOINT = 'https://hn.algolia.com/api/v1/search?query=';
 
-function App() {  
+function storiesReducer(state, action) {
+  switch (action.type) {
+    case 'SEARCH_EMPTY':
+      return { ...state, data: [], isLoading: false, isError: false };
+    case 'STORIES_FETCH_INIT':
+      return { ...state, isLoading: true, isError: false };
+    case 'STORIES_FETCH_SUCCESS':
+      return { ...state, data: action.payload, isLoading: false, isError: false };
+    case 'STORIES_FETCH_FAILURE':
+      return { ...state, isLoading: false, isError: true };
+    case 'REMOVE_STORY':
+      return { ...state, data: state.data.filter(story => story.objectID !== action.payload.objectID) };
+    default:
+      throw new Error();
+  }
+}
+
+let showSearch = ''
+
+function App() {
+  const [stories, dispatchStories] = React.useReducer(storiesReducer, { data: [], isLoading: false, isError: false })
+  const [searchTerm, setSearchTerm] = useStorageState('search', 'React')
+  const [confirmedSearch, setConfirmedSearch] = useState(searchTerm)
+
+
+  const handleFetchStories = React.useCallback(async () => {
+    if (searchTerm === '') {
+      dispatchStories({ type: 'SEARCH_EMPTY' })
+      return;
+    }
+
+    dispatchStories({ type: 'STORIES_FETCH_INIT' })
+
+    try {
+      const result = await axios.get(API_ENDPOINT + confirmedSearch)
+
+      dispatchStories({
+        type: 'STORIES_FETCH_SUCCESS',
+        payload: result.data.hits,
+      })
+    } catch {
+      dispatchStories({ type: 'STORIES_FETCH_FAILURE' })
+    }
+  }, [confirmedSearch])
+
+  React.useEffect(() => {
+    handleFetchStories()
+  }, [handleFetchStories])
+
   function useStorageState(key, initialState) {
     const [value, setValue] = useState(localStorage.getItem(key) || initialState)
 
@@ -32,19 +65,42 @@ function App() {
     return [value, setValue]
   }
 
-  const [searchTerm, setSearchTerm] = useStorageState('search', 'React')
-
-  function handeleSearch(event) {
+  function handeleSearchInput(event) {
     setSearchTerm(event.target.value)
   }
+
+  function handleRemoveStory(item) {
+    dispatchStories({
+      type: 'REMOVE_STORY',
+      payload: item
+    })
+  }
+
+  function handleSearchSubmit(event) {
+    setConfirmedSearch(searchTerm)
+
+    event.preventDefault()
+  }
+
+  React.useEffect(() => {
+    showSearch = `Searched for: "${confirmedSearch}"`
+  }, [confirmedSearch])
 
   return (
     <div>
       <h1>My Hacker Stories</h1>
-      <InputWithLabel id='Search' label='Search: ' placeholder='Write Here' onSearch={handeleSearch} search={searchTerm}>Search: </InputWithLabel>
-      <InputWithLabel id='Hello!' label='Hello! ' type='checkbox' placeholder='Write Here If You Want'>Child</InputWithLabel>
+
+      <SearchForm searchTerm={searchTerm} onSearchInput={handeleSearchInput} onSearchSubmit={handleSearchSubmit} />
+
+      <p>{showSearch}</p>
       <hr />
-      <List list={stories.filter(item => item.title.toLowerCase().includes(searchTerm.toLowerCase()))} />
+      {stories.isError && <p>Error</p>}
+      {stories.isLoading ? (
+        <p>Loading...</p>
+      ) : (
+        <List list={stories.data} remove={handleRemoveStory} />
+      )
+      }
     </div>
   );
 }
